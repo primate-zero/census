@@ -1,8 +1,11 @@
 package guerin.justin.census.service;
 
+import guerin.justin.census.model.CensusDataFields;
 import guerin.justin.census.model.PostalCodeData;
 import guerin.justin.census.model.dto.PostalCodeDto;
 import guerin.justin.census.repository.PostalCodeRepository;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVRecord;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -40,36 +43,28 @@ public class PostalCodeService {
     public List<PostalCodeData> findFirstNByPopulationGreaterThan(Long minPopulation, int numResults) {
         Sort sort = Sort.by(Sort.Direction.DESC, "population");
         Pageable pageable = PageRequest.of(0, numResults, sort);
-        return postalCodeRepository.findByPopulationGreaterThan(minPopulation, pageable).toList();
+        return postalCodeRepository.findByPopulationGreaterThan(minPopulation, pageable);
     }
 
     public List<PostalCodeData> insertFromFile(MultipartFile file) throws IOException {
         List<PostalCodeData> newPostCodeData = new ArrayList<>();
         BufferedReader br = new BufferedReader(new InputStreamReader(file.getInputStream()));
-        String line;
-        while ((line=br.readLine()) != null) {
-            String[] tokens = line.split(",");
-            if (tokens.length != 7) {
-                continue;
-            }
-            long population;
-            float medianAge;
-            long males;
-            long females;
-            long houseCnt;
-            float avgHouseSize;
-            try {
-                population = Long.parseLong(tokens[1]);
-                medianAge = Float.parseFloat(tokens[2]);
-                males = Long.parseLong(tokens[3]);
-                females = Long.parseLong(tokens[4]);
-                houseCnt = Long.parseLong(tokens[5]);
-                avgHouseSize = Float.parseFloat(tokens[6]);
-            } catch (NumberFormatException nfe) {
-                continue;
-            }
-            PostalCodeData postalCodeData = new PostalCodeData(tokens[0], population, medianAge, males, females, houseCnt,
-                    avgHouseSize);
+        Iterable<CSVRecord> records = (CSVFormat.RFC4180.withFirstRecordAsHeader()).parse(br);
+        long population;
+        float medianAge;
+        long males;
+        long females;
+        long houseCnt;
+        float avgHouseSize;
+        for (CSVRecord record : records) {
+            population = Long.parseLong(record.get(CensusDataFields.POPULATION.getHeader()));
+            medianAge = Float.parseFloat(record.get(CensusDataFields.MEDIAN_AGE.getHeader()));
+            males = Long.parseLong(record.get(CensusDataFields.TOTAL_MALES.getHeader()));
+            females = Long.parseLong(record.get(CensusDataFields.TOTAL_FEMALES.getHeader()));
+            houseCnt = Long.parseLong(record.get(CensusDataFields.TOTAL_HOUSEHOLDS.getHeader()));
+            avgHouseSize = Float.parseFloat(record.get(CensusDataFields.AVG_HOUSEHOLD_SIZE.getHeader()));
+            PostalCodeData postalCodeData = new PostalCodeData(record.get(CensusDataFields.POSTAL_CODE.getHeader()), population,
+                    medianAge, males, females, houseCnt, avgHouseSize);
             newPostCodeData.add(postalCodeData);
         }
         return postalCodeRepository.saveAll(newPostCodeData);
